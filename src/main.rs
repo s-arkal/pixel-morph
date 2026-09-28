@@ -52,33 +52,52 @@ fn color_distance_squared(p1: &Pixel, p2: &Pixel) -> u32 {
     (dr * dr + dg * dg + db * db) as u32
 }
 
-fn find_closest_pixel(source: &[Pixel], used: &[bool], target: &Pixel) -> Option<usize> {
+fn position_distance_squared(p1: &Pixel, p2: &Pixel) -> u32 {
+    let dx = p1.x as i32 - p2.x as i32;
+    let dy = p1.y as i32 - p2.y as i32;
+
+    (dx * dx + dy * dy) as u32
+}
+
+fn pixel_cost(p1: &Pixel, p2: &Pixel, spatial_weight: f32) -> f32 {
+    let color_cost = color_distance_squared(p1, p2);
+    let position_cost = position_distance_squared(p1, p2);
+
+    color_cost as f32 + spatial_weight * (position_cost as f32)
+}
+
+fn find_closest_pixel(
+    source: &[Pixel],
+    used: &[bool],
+    target: &Pixel,
+    spatial_weight: f32,
+) -> Option<usize> {
     let mut best_index: Option<usize> = None;
-    let mut best_distance = u32::MAX;
+    let mut best_cost = f32::MAX;
 
     for (index, pixel) in source.iter().enumerate() {
         if used[index] {
             continue;
         }
 
-        let distance = color_distance_squared(pixel, target);
+        let cost = pixel_cost(pixel, target, spatial_weight);
 
-        if distance < best_distance {
-            best_distance = distance;
+        if cost < best_cost {
+            best_cost = cost;
             best_index = Some(index);
         }
     }
     best_index
 }
 
-fn create_particles(source: &[Pixel], target: &[Pixel]) -> Vec<Particle> {
+fn create_particles(source: &[Pixel], target: &[Pixel], spatial_weight: f32) -> Vec<Particle> {
     assert_eq!(source.len(), target.len());
 
     let mut used = vec![false; source.len()];
     let mut particles = Vec::new();
 
     for target_pixel in target {
-        let source_index = find_closest_pixel(source, &used, target_pixel);
+        let source_index = find_closest_pixel(source, &used, target_pixel, spatial_weight);
 
         match source_index {
             Some(index) => {
@@ -133,7 +152,7 @@ async fn main() {
 
     println!("Creating assignments");
 
-    let particles = create_particles(&source, &target);
+    let particles = create_particles(&source, &target, 1.0);
 
     println!("Created {} particles", particles.len());
 
