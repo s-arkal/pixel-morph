@@ -3,6 +3,7 @@ use macroquad::prelude::*;
 
 const IMAGE_WIDTH: u32 = 64;
 const IMAGE_HEIGHT: u32 = 64;
+const MAX_COLOR_DISTANCE: f32 = 3.0 * 255.0 * 255.0;
 
 #[derive(Clone, Copy, Debug)]
 
@@ -59,11 +60,19 @@ fn position_distance_squared(p1: &Pixel, p2: &Pixel) -> u32 {
     (dx * dx + dy * dy) as u32
 }
 
-fn pixel_cost(p1: &Pixel, p2: &Pixel, spatial_weight: f32) -> f32 {
-    let color_cost = color_distance_squared(p1, p2);
-    let position_cost = position_distance_squared(p1, p2);
+fn max_position_distance_squared(width: u32, height: u32) -> f32 {
+    let dy = width - 1;
+    let dx = height - 1;
 
-    color_cost as f32 + spatial_weight * (position_cost as f32)
+    (dx * dx + dy * dy) as f32
+}
+
+fn pixel_cost(p1: &Pixel, p2: &Pixel, spatial_weight: f32) -> f32 {
+    let max_position_distance = max_position_distance_squared(IMAGE_WIDTH, IMAGE_HEIGHT);
+    let color_cost = color_distance_squared(p1, p2) as f32 / MAX_COLOR_DISTANCE;
+    let position_cost = position_distance_squared(p1, p2) as f32 / max_position_distance;
+
+    color_cost + spatial_weight * position_cost
 }
 
 fn find_closest_pixel(
@@ -162,14 +171,23 @@ async fn main() {
         clear_background(BLACK);
         let elapsed = (get_time() - start_time) as f32;
         let duration = 5.0;
-        let t = (elapsed / duration).clamp(0.0, 1.0);
 
-        let t = ease_in_and_out(t);
+        let center_x = IMAGE_HEIGHT as f32 / 2.0;
+        let center_y = IMAGE_WIDTH as f32 / 2.0;
 
         let scale = 8.0;
         for particle in &particles {
-            let x = linear_interp(particle.start_x, particle.end_x, t);
-            let y = linear_interp(particle.start_y, particle.end_y, t);
+            let dx = particle.start_x - center_x;
+            let dy = particle.start_y - center_y;
+
+            let center_distance = (dx * dx + dy * dy).sqrt();
+
+            let delay = center_distance * 0.01;
+            let particle_t = ((elapsed - delay) / duration).clamp(0.0, 1.0);
+            let particle_t = ease_in_and_out(particle_t);
+
+            let x = linear_interp(particle.start_x, particle.end_x, particle_t);
+            let y = linear_interp(particle.start_y, particle.end_y, particle_t);
 
             let color = Color::from_rgba(particle.r, particle.g, particle.b, 255);
 
